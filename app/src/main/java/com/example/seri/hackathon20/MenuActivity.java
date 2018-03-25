@@ -7,6 +7,7 @@ import android.os.AsyncTask;
 import android.support.v7.app.AppCompatActivity;
 import android.os.Bundle;
 import android.util.Log;
+import android.view.Menu;
 import android.view.View;
 import android.widget.Button;
 import android.widget.EditText;
@@ -19,17 +20,12 @@ import com.android.volley.RequestQueue;
 import com.android.volley.Response;
 import com.android.volley.VolleyError;
 import com.android.volley.toolbox.StringRequest;
-import com.android.volley.toolbox.Volley;
-import com.braintreepayments.api.BraintreeFragment;
-import com.braintreepayments.api.Card;
-import com.braintreepayments.api.dropin.AddCardActivity;
+import com.android.volley.toolbox.Volley;;
 import com.braintreepayments.api.dropin.DropInActivity;
 import com.braintreepayments.api.dropin.DropInRequest;
 import com.braintreepayments.api.dropin.DropInResult;
-import com.braintreepayments.api.exceptions.InvalidArgumentException;
 import com.braintreepayments.api.interfaces.HttpResponseCallback;
 import com.braintreepayments.api.internal.HttpClient;
-import com.braintreepayments.api.models.CardBuilder;
 import com.braintreepayments.api.models.PaymentMethodNonce;
 import com.google.firebase.auth.FirebaseAuth;
 
@@ -40,19 +36,19 @@ public class MenuActivity extends AppCompatActivity implements View.OnClickListe
 
     private FirebaseAuth firebaseAuth;
 
-    private BraintreeFragment mBraintreeFragment;
-    private static final String AUTHORIZATION_FROM_SERVER = "sandbox_z56khzyw_gqngz2by639stypk";
-
     final int REQUEST_CODE = 1;
     final String get_token = "http://dunno.ddns.net/BraintreePayments/main.php";
     final String send_payment_details = "http://dunno.ddns.net/BraintreePayments/checkout.php";
     final String add_payment_method = "http://dunno.ddns.net/BraintreePayments/createPayment.php";
+    final String delete_customer = "Http://dunno.ddns.net/BraintreePayments/deleteCustomer.php";
+
     String token, amount;
     HashMap<String, String> paramHash;
     HashMap<String, String> idHash;
 
     Button addCard;
     Button btnPay;
+    Button btnDelete;
     EditText etAmount;
     LinearLayout llHolder;
 
@@ -68,6 +64,13 @@ public class MenuActivity extends AppCompatActivity implements View.OnClickListe
         etAmount = (EditText) findViewById(R.id.etPrice);
         btnPay = (Button) findViewById(R.id.btnPay);
         addCard = (Button) findViewById(R.id.AddCard);
+        btnDelete = (Button) findViewById(R.id.btnDelete);
+        btnDelete.setOnClickListener(new View.OnClickListener() {
+            @Override
+            public void onClick(View view) {
+                delete();
+            }
+        });
         addCard.setOnClickListener(new View.OnClickListener() {
             @Override
             public void onClick(View view) {
@@ -123,6 +126,7 @@ public class MenuActivity extends AppCompatActivity implements View.OnClickListe
                 paramHash = new HashMap<>();
                 paramHash.put("nonce", stringNonce);
                 paramHash.put("id", firebaseAuth.getUid());
+                sendCardDetails();
             } else if (resultCode == Activity.RESULT_CANCELED) {
                 // the user canceled
             } else {
@@ -130,6 +134,55 @@ public class MenuActivity extends AppCompatActivity implements View.OnClickListe
                 Exception error = (Exception) data.getSerializableExtra(DropInActivity.EXTRA_ERROR);
             }
         }
+    }
+
+    public void delete(){
+        paramHash = new HashMap<>();
+        paramHash.put("id", firebaseAuth.getUid());
+
+        RequestQueue queue = Volley.newRequestQueue(MenuActivity.this);
+
+        StringRequest stringRequest = new StringRequest(Request.Method.POST, delete_customer,
+                new Response.Listener<String>() {
+                    @Override
+                    public void onResponse(String response) {
+                        if(response.contains("Successful"))
+                        {
+                            Toast.makeText(MenuActivity.this, "User deleted!", Toast.LENGTH_LONG).show();
+                            firebaseAuth.signOut();
+                            finish();
+                            change(LoginActivity.class);
+                        }
+                        else Toast.makeText(MenuActivity.this, "Failed to delete user!", Toast.LENGTH_LONG).show();
+                        Log.d("mylog", "Final Response: " + response.toString());
+                    }
+                }, new Response.ErrorListener() {
+            @Override
+            public void onErrorResponse(VolleyError error) {
+                Log.d("mylog", "Volley error : " + error.toString());
+            }
+        }) {
+            @Override
+            protected Map<String, String> getParams() {
+                if (paramHash == null)
+                    return null;
+                Map<String, String> params = new HashMap<>();
+                for (String key : paramHash.keySet()) {
+                    params.put(key, paramHash.get(key));
+                    Log.d("mylog", "Key : " + key + " Value : " + paramHash.get(key));
+                }
+
+                return params;
+            }
+
+            @Override
+            public Map<String, String> getHeaders() throws AuthFailureError {
+                Map<String, String> params = new HashMap<>();
+                params.put("Content-Type", "application/x-www-form-urlencoded");
+                return params;
+            }
+        };
+        queue.add(stringRequest);
     }
 
     public void ceva(){
@@ -143,6 +196,49 @@ public class MenuActivity extends AppCompatActivity implements View.OnClickListe
         DropInRequest dropInRequest = new DropInRequest()
                 .clientToken(token);
         startActivityForResult(dropInRequest.getIntent(this), REQUEST_CODE);
+    }
+
+    private void sendCardDetails() {
+        RequestQueue queue = Volley.newRequestQueue(MenuActivity.this);
+
+        StringRequest stringRequest = new StringRequest(Request.Method.POST, add_payment_method,
+                new Response.Listener<String>() {
+                    @Override
+                    public void onResponse(String response) {
+                        if(response.contains("Successful"))
+                        {
+                            Toast.makeText(MenuActivity.this, "Card added!", Toast.LENGTH_LONG).show();
+                        }
+                        else Toast.makeText(MenuActivity.this, "Failed to add card!", Toast.LENGTH_LONG).show();
+                        Log.d("mylog", "Final Response: " + response.toString());
+                    }
+                }, new Response.ErrorListener() {
+            @Override
+            public void onErrorResponse(VolleyError error) {
+                Log.d("mylog", "Volley error : " + error.toString());
+            }
+        }) {
+            @Override
+            protected Map<String, String> getParams() {
+                if (paramHash == null)
+                    return null;
+                Map<String, String> params = new HashMap<>();
+                for (String key : paramHash.keySet()) {
+                    params.put(key, paramHash.get(key));
+                    Log.d("mylog", "Key : " + key + " Value : " + paramHash.get(key));
+                }
+
+                return params;
+            }
+
+            @Override
+            public Map<String, String> getHeaders() throws AuthFailureError {
+                Map<String, String> params = new HashMap<>();
+                params.put("Content-Type", "application/x-www-form-urlencoded");
+                return params;
+            }
+        };
+        queue.add(stringRequest);
     }
 
     private void sendPaymentDetails() {
@@ -202,7 +298,7 @@ public class MenuActivity extends AppCompatActivity implements View.OnClickListe
                     @Override
                     public void onResponse(String response) {
                         Toast.makeText(MenuActivity.this, "Token successful", Toast.LENGTH_LONG).show();
-                        //llHolder.setVisibility(View.VISIBLE);
+                        llHolder.setVisibility(View.VISIBLE);
                         token = response;
                     }
                 }, new Response.ErrorListener() {
